@@ -236,3 +236,18 @@ These are used directly by name — no wrapper macros.
 - `bof_net.h` must be included for network structs
 - `bof_ntapi.h` must be included for native api structs
 - Cobalt Strike BOFs work natively — `datap` is aliased to `_args`
+
+## Disclaimer
+
+This project is a work in progress. Please be aware that:
+
+- Struct definitions may be incomplete or missing fields for certain use cases
+- DFR declarations and convenience macros may not cover all function signatures or calling conventions
+- Not all Windows API surface area is covered — you may need to add your own `DECLSPEC_IMPORT` declarations
+- Compatibility has not been verified across all C2 frameworks that support the BOF format
+
+If you find issues or have improvements, contributions are welcome.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
