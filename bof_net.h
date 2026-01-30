@@ -65,9 +65,45 @@ typedef struct _IP_ADAPTER_INFO {
 	IP_ADDR_STRING SecondaryWinsServer;
 } IP_ADAPTER_INFO, *PIP_ADAPTER_INFO;
 
+// TCP state constants
+#define MIB_TCP_STATE_CLOSED     1
+#define MIB_TCP_STATE_LISTEN     2
+#define MIB_TCP_STATE_SYN_SENT   3
+#define MIB_TCP_STATE_SYN_RCVD   4
+#define MIB_TCP_STATE_ESTAB      5
+#define MIB_TCP_STATE_FIN_WAIT1  6
+#define MIB_TCP_STATE_FIN_WAIT2  7
+#define MIB_TCP_STATE_CLOSE_WAIT 8
+#define MIB_TCP_STATE_CLOSING    9
+#define MIB_TCP_STATE_LAST_ACK   10
+#define MIB_TCP_STATE_TIME_WAIT  11
+#define MIB_TCP_STATE_DELETE_TCB 12
+
+// TCP structs
+typedef struct _MIB_TCPROW_OWNER_PID {
+	DWORD dwState;
+	DWORD dwLocalAddr;
+	DWORD dwLocalPort;
+	DWORD dwRemoteAddr;
+	DWORD dwRemotePort;
+	DWORD dwOwningPid;
+} MIB_TCPROW_OWNER_PID, *PMIB_TCPROW_OWNER_PID;
+
 typedef struct _MIB_TCPTABLE_OWNER_PID {
 	DWORD dwNumEntries;
 	MIB_TCPROW_OWNER_PID table[ANY_SIZE];
-} MIB_TCPTABLE_OWNER_PID,*PMIB_TCPTABLE_OWNER_PID;
+} MIB_TCPTABLE_OWNER_PID, *PMIB_TCPTABLE_OWNER_PID;
 
-  #endif /* PYNET_BOF_NET_H */
+// UDP structs
+typedef struct _MIB_UDPROW_OWNER_PID {
+	DWORD dwLocalAddr;
+	DWORD dwLocalPort;
+	DWORD dwOwningPid;
+} MIB_UDPROW_OWNER_PID, *PMIB_UDPROW_OWNER_PID;
+
+typedef struct _MIB_UDPTABLE_OWNER_PID {
+	DWORD dwNumEntries;
+	MIB_UDPROW_OWNER_PID table[ANY_SIZE];
+} MIB_UDPTABLE_OWNER_PID, *PMIB_UDPTABLE_OWNER_PID;
+
+#endif /* PYNET_BOF_NET_H */
