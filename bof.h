@@ -231,9 +231,11 @@ DECLSPEC_IMPORT BOOL      BeaconVirtualFree(LPVOID addr, SIZE_T size, DWORD free
 DECLSPEC_IMPORT BOOL      BeaconGetThreadContext(HANDLE hThread, LPCONTEXT ctx);
 DECLSPEC_IMPORT BOOL      BeaconSetThreadContext(HANDLE hThread, LPCONTEXT ctx);
 DECLSPEC_IMPORT DWORD     BeaconResumeThread(HANDLE hThread);
+DECLSPEC_IMPORT void      BeaconSetIndirectSyscalls(BOOL use_indirect);
 DECLSPEC_IMPORT HANDLE    BeaconOpenProcess(DWORD desiredAccess, BOOL inheritHandle, DWORD pid);
 DECLSPEC_IMPORT HANDLE    BeaconOpenThread(DWORD desiredAccess, BOOL inheritHandle, DWORD tid);
 DECLSPEC_IMPORT BOOL      BeaconCloseHandle(HANDLE h);
+DECLSPEC_IMPORT HANDLE    BeaconCreateRemoteThread(HANDLE hProcess, LPVOID lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId);
 DECLSPEC_IMPORT BOOL      BeaconUnmapViewOfFile(LPCVOID baseAddr);
 DECLSPEC_IMPORT SIZE_T    BeaconVirtualQuery(LPCVOID addr, PMEMORY_BASIC_INFORMATION mbi, SIZE_T len);
 DECLSPEC_IMPORT BOOL      BeaconDuplicateHandle(HANDLE hSrcProc, HANDLE hSrc, HANDLE hDstProc, LPHANDLE hDst, DWORD access, BOOL inherit, DWORD options);
@@ -286,6 +288,7 @@ DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$DuplicateHandle(HANDLE, HANDLE, HANDLE, L
 
 /* Memory */
 DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$VirtualAlloc(LPVOID, SIZE_T, DWORD, DWORD);
+DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$VirtualAllocEx(HANDLE, LPVOID, SIZE_T, DWORD, DWORD);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$VirtualFree(LPVOID, SIZE_T, DWORD);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$VirtualProtect(LPVOID, SIZE_T, DWORD, PDWORD);
 DECLSPEC_IMPORT SIZE_T WINAPI KERNEL32$VirtualQuery(LPCVOID, PMEMORY_BASIC_INFORMATION, SIZE_T);
@@ -303,6 +306,10 @@ DECLSPEC_IMPORT BOOL    WINAPI KERNEL32$FreeLibrary(HMODULE);
 DECLSPEC_IMPORT FARPROC WINAPI KERNEL32$GetProcAddress(HMODULE, LPCSTR);
 DECLSPEC_IMPORT DWORD   WINAPI KERNEL32$GetModuleFileNameA(HMODULE, LPSTR, DWORD);
 DECLSPEC_IMPORT DWORD   WINAPI KERNEL32$GetModuleFileNameW(HMODULE, LPWSTR, DWORD);
+
+/* Process - cross-process operations */
+DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$WriteProcessMemory(HANDLE, LPVOID, LPCVOID, SIZE_T, SIZE_T*);
+DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateRemoteThreadEx(HANDLE, LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPVOID, LPDWORD);
 
 /* Process */
 DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$OpenProcess(DWORD, BOOL, DWORD);
@@ -480,6 +487,9 @@ DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$StartServiceA(SC_HANDLE, DWORD, LPCSTR*);
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$StartServiceW(SC_HANDLE, DWORD, LPCWSTR*);
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$ControlService(SC_HANDLE, DWORD, LPSERVICE_STATUS);
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$QueryServiceConfigA(SC_HANDLE, LPQUERY_SERVICE_CONFIGA, DWORD, LPDWORD);
+DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$QueryServiceStatusEx(SC_HANDLE, SC_STATUS_TYPE, LPBYTE, DWORD, LPDWORD);
+DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$EnumServicesStatusExA(SC_HANDLE, SC_ENUM_TYPE, DWORD, DWORD, LPBYTE, DWORD, LPDWORD, LPDWORD, LPDWORD, LPCSTR);
+DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$ChangeServiceConfigA(SC_HANDLE, DWORD, DWORD, DWORD, LPCSTR, LPCSTR, LPDWORD, LPCSTR, LPCSTR, LPCSTR, LPCSTR);
 /* Crypto */
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$CryptAcquireContextA(HCRYPTPROV*, LPCSTR, LPCSTR, DWORD, DWORD);
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$CryptAcquireContextW(HCRYPTPROV*, LPCWSTR, LPCWSTR, DWORD, DWORD);
@@ -661,6 +671,7 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define CloseHandle(...) KERNEL32$CloseHandle(__VA_ARGS__)
 #define DuplicateHandle(...) KERNEL32$DuplicateHandle(__VA_ARGS__)
 #define VirtualAlloc(...) KERNEL32$VirtualAlloc(__VA_ARGS__)
+#define VirtualAllocEx(...) KERNEL32$VirtualAllocEx(__VA_ARGS__)
 #define VirtualFree(...) KERNEL32$VirtualFree(__VA_ARGS__)
 #define VirtualProtect(...) KERNEL32$VirtualProtect(__VA_ARGS__)
 #define VirtualQuery(...) KERNEL32$VirtualQuery(__VA_ARGS__)
@@ -676,6 +687,8 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define GetProcAddress(...) KERNEL32$GetProcAddress(__VA_ARGS__)
 #define GetModuleFileNameA(...) KERNEL32$GetModuleFileNameA(__VA_ARGS__)
 #define GetModuleFileNameW(...) KERNEL32$GetModuleFileNameW(__VA_ARGS__)
+#define WriteProcessMemory(...) KERNEL32$WriteProcessMemory(__VA_ARGS__)
+#define CreateRemoteThreadEx(...) KERNEL32$CreateRemoteThreadEx(__VA_ARGS__)
 #define OpenProcess(...) KERNEL32$OpenProcess(__VA_ARGS__)
 #define TerminateProcess(...) KERNEL32$TerminateProcess(__VA_ARGS__)
 #define GetExitCodeProcess(...) KERNEL32$GetExitCodeProcess(__VA_ARGS__)
@@ -821,6 +834,9 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define StartServiceA(...) ADVAPI32$StartServiceA(__VA_ARGS__)
 #define StartServiceW(...) ADVAPI32$StartServiceW(__VA_ARGS__)
 #define ControlService(...) ADVAPI32$ControlService(__VA_ARGS__)
+#define QueryServiceStatusEx(...) ADVAPI32$QueryServiceStatusEx(__VA_ARGS__)
+#define EnumServicesStatusExA(...) ADVAPI32$EnumServicesStatusExA(__VA_ARGS__)
+#define ChangeServiceConfigA(...) ADVAPI32$ChangeServiceConfigA(__VA_ARGS__)
 #define CryptAcquireContextA(...) ADVAPI32$CryptAcquireContextA(__VA_ARGS__)
 #define CryptAcquireContextW(...) ADVAPI32$CryptAcquireContextW(__VA_ARGS__)
 #define CryptReleaseContext(...) ADVAPI32$CryptReleaseContext(__VA_ARGS__)

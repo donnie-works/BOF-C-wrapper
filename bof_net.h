@@ -22,6 +22,13 @@
 #define MIB_IF_TYPE_LOOPBACK  24
 #define MIB_IF_TYPE_PPP       23
 
+// Table class enum values
+#define TCP_TABLE_OWNER_PID_ALL 5
+#define UDP_TABLE_OWNER_PID     1
+
+#ifndef ANY_SIZE
+#define ANY_SIZE 1
+#endif
 // Structs
 typedef struct {
 	char String[16];
@@ -79,7 +86,6 @@ typedef struct _IP_ADAPTER_INFO {
 #define MIB_TCP_STATE_TIME_WAIT  11
 #define MIB_TCP_STATE_DELETE_TCB 12
 
-// TCP structs
 typedef struct _MIB_TCPROW_OWNER_PID {
 	DWORD dwState;
 	DWORD dwLocalAddr;
@@ -89,12 +95,13 @@ typedef struct _MIB_TCPROW_OWNER_PID {
 	DWORD dwOwningPid;
 } MIB_TCPROW_OWNER_PID, *PMIB_TCPROW_OWNER_PID;
 
+// TCP Table
 typedef struct _MIB_TCPTABLE_OWNER_PID {
 	DWORD dwNumEntries;
 	MIB_TCPROW_OWNER_PID table[ANY_SIZE];
-} MIB_TCPTABLE_OWNER_PID, *PMIB_TCPTABLE_OWNER_PID;
+} MIB_TCPTABLE_OWNER_PID,*PMIB_TCPTABLE_OWNER_PID;
 
-// UDP structs
+// UDP Table
 typedef struct _MIB_UDPROW_OWNER_PID {
 	DWORD dwLocalAddr;
 	DWORD dwLocalPort;
@@ -102,8 +109,8 @@ typedef struct _MIB_UDPROW_OWNER_PID {
 } MIB_UDPROW_OWNER_PID, *PMIB_UDPROW_OWNER_PID;
 
 typedef struct _MIB_UDPTABLE_OWNER_PID {
-	DWORD dwNumEntries;
+	DWORD                dwNumEntries;
 	MIB_UDPROW_OWNER_PID table[ANY_SIZE];
 } MIB_UDPTABLE_OWNER_PID, *PMIB_UDPTABLE_OWNER_PID;
 
-#endif /* PYNET_BOF_NET_H */
+  #endif /* PYNET_BOF_NET_H */
