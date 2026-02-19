@@ -1,13 +1,23 @@
 # BOF-C-wrapper
 
-C header SDK for writing Beacon Object Files (BOFs) in a manner closer to standard C code. Compatible with Cobalt Strike and other C2s using the Cobalt Strike BOF format.
+Writing BOFs traditionally requires verbose `DECLSPEC_IMPORT` declarations, explicit `DLL$Function` syntax, and manual struct definitions — all of which make BOF code harder to write and maintain.
+
+This SDK seeks to eliminate that friction. Through convenience macros and pre-declared DFR symbols, you can write BOFs using familiar Windows API names and standard C patterns.
+
+## Features
+
+- **Standard C style** — Use `OpenProcess()`, `VirtualAlloc()`, `HeapFree()` directly instead of `KERNEL32$OpenProcess`
+- **No boilerplate** — 300+ DFR declarations and convenience macros included
+- **Backwards compatible** — Works with existing `datap` and `beacon.h` patterns
+- **Standalone testing** — Compile and test BOFs as regular executables via compatibility layer
 
 ## Files
 
-- **bof.h** - Main SDK header. Includes output macros, argument parsing, Dynamic Function Resolution (DFR)
-declarations, and convenience macros for Windows APIs.
-- **bof_net.h** - Network structure definitions (`MIB_TCPTABLE_OWNER_PID`, `IP_ADAPTER_INFO`, etc.). Use instead of
-`<iphlpapi.h>` to avoid DFR conflicts. Include after `bof.h`.
+- **bof.h** — Main SDK header with output macros, argument parsing, DFR declarations, and convenience macros
+- **bof_net.h** — Network structures (`MIB_TCPTABLE_OWNER_PID`, `IP_ADAPTER_INFO`, etc.) for use instead of `<iphlpapi.h>`
+- **bof_ntapi.h** — NT native API structures (`SYSTEM_PROC_INFO`, `PS_ATTRIBUTE_LIST`, etc.)
+- **bof_wmi.h** — WMI/DCOM interface definitions for remote operations
+- **bof_compat.h** — Compatibility layer for compiling BOFs as standalone executables outside a C2
 
 ## Usage 
 
@@ -194,47 +204,33 @@ void go(char* args, int len)
 | USER32 | Window enumeration, message box |
 | SHELL32 | Shell execute, special folders |
 | OLE32 | COM initialization |
+| OLEAUT32 | BSTR, VARIANT, SafeArray functions |
 | MSVCRT | String, memory, formatting (prefixed with `_`) |
 
 ---
 
 ## Convenience Macros
 
-| Macro | Maps To | Description |
-|---|---|---|
-| `_printf(fmt, ...)` | `BeaconPrintf(CALLBACK_OUTPUT, ...)` | Standard output to teamserver |
-| `_perror(fmt, ...)` | `BeaconPrintf(CALLBACK_ERROR, ...)` | Error output to teamserver |
-| `_args_parse(a, buf, len)` | `BeaconDataParse()` | Initialize argument parser |
-| `_args_int(a)` | `BeaconDataInt()` | Extract int from args |
-| `_args_short(a)` | `BeaconDataShort()` | Extract short from args |
-| `_args_str(a, out_len)` | `BeaconDataExtract()` | Extract string from args |
-| `_args_left(a)` | `BeaconDataLength()` | Remaining bytes in args |
-| `_args_ptr(a, size)` | `BeaconDataPtr()` | Extract raw pointer from args |
+Output and argument parsing use short, familiar names:
+
+```c
+_printf("PID: %d\n", pid);       // BeaconPrintf(CALLBACK_OUTPUT, ...)
+_perror("Failed: 0x%08X", err);  // BeaconPrintf(CALLBACK_ERROR, ...)
+
+_args parser;
+_args_parse(&parser, args, len); // BeaconDataParse()
+int pid = _args_int(&parser);    // BeaconDataInt()
+char* str = _args_str(&parser, &out_len); // BeaconDataExtract()
+```
 
 ## Beacon APIs
 
-These are used directly by name — no wrapper macros.
-
-- **Format**: `BeaconFormatAlloc()`, `BeaconFormatReset()`, `BeaconFormatFree()`, `BeaconFormatAppend()`,
-`BeaconFormatPrintf()`, `BeaconFormatInt()`, `BeaconFormatToString()`
-- **Token**: `BeaconUseToken()`, `BeaconRevertToken()`, `BeaconIsAdmin()`
-- **Spawn/Inject**: `BeaconGetSpawnTo()`, `BeaconSpawnTemporaryProcess()`, `BeaconInjectProcess()`,
-`BeaconInjectTemporaryProcess()`, `BeaconCleanupProcess()`
-- **Data Store**: `BeaconDataStoreGetItem()`, `BeaconDataStoreProtectItem()`, `BeaconDataStoreUnprotectItem()`,
-`BeaconDataStoreMaxEntries()`
-- **Key-Value**: `BeaconAddValue()`, `BeaconGetValue()`, `BeaconRemoveValue()`
-- **Syscalls**: `BeaconVirtualAlloc()`, `BeaconVirtualAllocEx()`, `BeaconVirtualProtect()`,
-`BeaconVirtualProtectEx()`, `BeaconVirtualFree()`, `BeaconOpenProcess()`, `BeaconCloseHandle()`, etc.
-- **Beacon Gate**: `BeaconEnableBeaconGate()`, `BeaconDisableBeaconGate()`, `BeaconEnableBeaconGateMasking()`,
-`BeaconDisableBeaconGateMasking()`
-- **Utility**: `toWideChar()`, `BeaconInformation()`, `BeaconGetCustomUserData()`, `BeaconDownload()`
+Standard Beacon APIs are available directly — Format, Token, Spawn/Inject, Data Store, Key-Value, Syscalls, BeaconGate, and Utility functions.
 
 ## Notes
 
-- MSVCRT functions are prefixed with `_` to avoid compiler builtin conflicts (e.g., `_strlen()`, `_sprintf()`)
-- All other header files should be included after `bof.h`
-- `bof_net.h` must be included for network structs
-- `bof_ntapi.h` must be included for native api structs
+- Include `bof.h` first, then any additional headers as needed
+- MSVCRT functions are prefixed with `_` to avoid compiler builtin conflicts (`_strlen()`, `_sprintf()`)
 - Cobalt Strike BOFs work natively — `datap` is aliased to `_args`
 
 ## Disclaimer
