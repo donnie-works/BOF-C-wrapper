@@ -386,6 +386,7 @@ DECLSPEC_IMPORT VOID  WINAPI KERNEL32$GetSystemInfo(LPSYSTEM_INFO);
 DECLSPEC_IMPORT VOID  WINAPI KERNEL32$GetNativeSystemInfo(LPSYSTEM_INFO);
 DECLSPEC_IMPORT VOID  WINAPI KERNEL32$GetSystemTime(LPSYSTEMTIME);
 DECLSPEC_IMPORT VOID  WINAPI KERNEL32$GetLocalTime(LPSYSTEMTIME);
+DECLSPEC_IMPORT VOID  WINAPI KERNEL32$GetSystemTimeAsFileTime(LPFILETIME);
 DECLSPEC_IMPORT DWORD WINAPI KERNEL32$GetTickCount(void);
 DECLSPEC_IMPORT ULONGLONG WINAPI KERNEL32$GetTickCount64(void);
 DECLSPEC_IMPORT BOOL  WINAPI KERNEL32$QueryPerformanceCounter(LARGE_INTEGER*);
@@ -490,6 +491,10 @@ DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$QueryServiceConfigA(SC_HANDLE, LPQUERY_SERV
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$QueryServiceStatusEx(SC_HANDLE, SC_STATUS_TYPE, LPBYTE, DWORD, LPDWORD);
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$EnumServicesStatusExA(SC_HANDLE, SC_ENUM_TYPE, DWORD, DWORD, LPBYTE, DWORD, LPDWORD, LPDWORD, LPDWORD, LPCSTR);
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$ChangeServiceConfigA(SC_HANDLE, DWORD, DWORD, DWORD, LPCSTR, LPCSTR, LPDWORD, LPCSTR, LPCSTR, LPCSTR, LPCSTR);
+DECLSPEC_IMPORT SC_HANDLE WINAPI ADVAPI32$CreateServiceA(SC_HANDLE, LPCSTR, LPCSTR, DWORD, DWORD, DWORD, DWORD, LPCSTR, LPCSTR, LPDWORD, LPCSTR, LPCSTR, LPCSTR);
+DECLSPEC_IMPORT SC_HANDLE WINAPI ADVAPI32$CreateServiceW(SC_HANDLE, LPCWSTR, LPCWSTR, DWORD, DWORD, DWORD, DWORD, LPCWSTR, LPCWSTR, LPDWORD, LPCWSTR, LPCWSTR, LPCWSTR);
+DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$DeleteService(SC_HANDLE);
+
 /* Crypto */
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$CryptAcquireContextA(HCRYPTPROV*, LPCSTR, LPCSTR, DWORD, DWORD);
 DECLSPEC_IMPORT BOOL WINAPI ADVAPI32$CryptAcquireContextW(HCRYPTPROV*, LPCWSTR, LPCWSTR, DWORD, DWORD);
@@ -504,6 +509,15 @@ DECLSPEC_IMPORT BOOLEAN WINAPI SECUR32$GetUserNameExA(DWORD, LPSTR, PULONG);
 DECLSPEC_IMPORT BOOLEAN WINAPI SECUR32$GetUserNameExW(DWORD, LPWSTR, PULONG);
 DECLSPEC_IMPORT BOOLEAN WINAPI SECUR32$GetComputerObjectNameA(DWORD, LPSTR, PULONG);
 DECLSPEC_IMPORT BOOLEAN WINAPI SECUR32$GetComputerObjectNameW(DWORD, LPWSTR, PULONG);
+
+/* ===========================================================================
+ * MPR (Network)
+ * ===========================================================================*/
+
+DECLSPEC_IMPORT DWORD WINAPI MPR$WNetAddConnection2A(LPNETRESOURCEA, LPCSTR, LPCSTR, DWORD);
+DECLSPEC_IMPORT DWORD WINAPI MPR$WNetAddConnection2W(LPNETRESOURCEW, LPCWSTR, LPCWSTR, DWORD);
+DECLSPEC_IMPORT DWORD WINAPI MPR$WNetCancelConnection2A(LPCSTR, DWORD, BOOL);
+DECLSPEC_IMPORT DWORD WINAPI MPR$WNetCancelConnection2W(LPCWSTR, DWORD, BOOL);
 
 /* ===========================================================================
  * NTDLL
@@ -618,7 +632,18 @@ DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoInitialize(LPVOID);
 DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoInitializeEx(LPVOID, DWORD);
 DECLSPEC_IMPORT void WINAPI OLE32$CoUninitialize(void);
 DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoCreateInstance(REFCLSID, LPUNKNOWN, DWORD, REFIID, LPVOID*);
+DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoCreateInstanceEx(REFCLSID, LPUNKNOWN, DWORD, void*, DWORD, void*);
+DECLSPEC_IMPORT HRESULT WINAPI OLE32$CoSetProxyBlanket(IUnknown*, DWORD, DWORD, OLECHAR*, DWORD, DWORD, void*, DWORD);
 DECLSPEC_IMPORT void WINAPI OLE32$CoTaskMemFree(LPVOID);
+
+/* ===========================================================================
+ * OLEAUT32
+ * ===========================================================================*/
+
+DECLSPEC_IMPORT BSTR WINAPI OLEAUT32$SysAllocString(const OLECHAR*);
+DECLSPEC_IMPORT void WINAPI OLEAUT32$SysFreeString(BSTR);
+DECLSPEC_IMPORT void WINAPI OLEAUT32$VariantInit(VARIANTARG*);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$VariantClear(VARIANTARG*);
 
 /* ===========================================================================
  * MSVCRT (use sparingly)
@@ -751,6 +776,7 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define GetNativeSystemInfo(...) KERNEL32$GetNativeSystemInfo(__VA_ARGS__)
 #define GetSystemTime(...) KERNEL32$GetSystemTime(__VA_ARGS__)
 #define GetLocalTime(...) KERNEL32$GetLocalTime(__VA_ARGS__)
+#define GetSystemTimeAsFileTime(...) KERNEL32$GetSystemTimeAsFileTime(__VA_ARGS__)
 #define GetTickCount(...) KERNEL32$GetTickCount(__VA_ARGS__)
 #define GetTickCount64(...) KERNEL32$GetTickCount64(__VA_ARGS__)
 #define QueryPerformanceCounter(...) KERNEL32$QueryPerformanceCounter(__VA_ARGS__)
@@ -837,6 +863,9 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define QueryServiceStatusEx(...) ADVAPI32$QueryServiceStatusEx(__VA_ARGS__)
 #define EnumServicesStatusExA(...) ADVAPI32$EnumServicesStatusExA(__VA_ARGS__)
 #define ChangeServiceConfigA(...) ADVAPI32$ChangeServiceConfigA(__VA_ARGS__)
+#define CreateServiceA(...) ADVAPI32$CreateServiceA(__VA_ARGS__)
+#define CreateServiceW(...) ADVAPI32$CreateServiceW(__VA_ARGS__)
+#define DeleteService(...) ADVAPI32$DeleteService(__VA_ARGS__)
 #define CryptAcquireContextA(...) ADVAPI32$CryptAcquireContextA(__VA_ARGS__)
 #define CryptAcquireContextW(...) ADVAPI32$CryptAcquireContextW(__VA_ARGS__)
 #define CryptReleaseContext(...) ADVAPI32$CryptReleaseContext(__VA_ARGS__)
@@ -847,6 +876,12 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define GetUserNameExW(...) SECUR32$GetUserNameExW(__VA_ARGS__)
 #define GetComputerObjectNameA(...) SECUR32$GetComputerObjectNameA(__VA_ARGS__)
 #define GetComputerObjectNameW(...) SECUR32$GetComputerObjectNameW(__VA_ARGS__)
+
+/* mpr (network) */
+#define WNetAddConnection2A(...) MPR$WNetAddConnection2A(__VA_ARGS__)
+#define WNetAddConnection2W(...) MPR$WNetAddConnection2W(__VA_ARGS__)
+#define WNetCancelConnection2A(...) MPR$WNetCancelConnection2A(__VA_ARGS__)
+#define WNetCancelConnection2W(...) MPR$WNetCancelConnection2W(__VA_ARGS__)
 
 /* ntdll */
 #define NtClose(...) NTDLL$NtClose(__VA_ARGS__)
@@ -934,7 +969,15 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define CoInitializeEx(...) OLE32$CoInitializeEx(__VA_ARGS__)
 #define CoUninitialize(...) OLE32$CoUninitialize(__VA_ARGS__)
 #define CoCreateInstance(...) OLE32$CoCreateInstance(__VA_ARGS__)
+#define CoCreateInstanceEx(...) OLE32$CoCreateInstanceEx(__VA_ARGS__)
+#define CoSetProxyBlanket(...) OLE32$CoSetProxyBlanket(__VA_ARGS__)
 #define CoTaskMemFree(...) OLE32$CoTaskMemFree(__VA_ARGS__)
+
+/* oleaut32 */
+#define SysAllocString(...) OLEAUT32$SysAllocString(__VA_ARGS__)
+#define SysFreeString(...) OLEAUT32$SysFreeString(__VA_ARGS__)
+#define VariantInit(...) OLEAUT32$VariantInit(__VA_ARGS__)
+#define VariantClear(...) OLEAUT32$VariantClear(__VA_ARGS__)
 
 /* msvcrt - prefixed with underscore to avoid conflicts with compiler builtins */
 #define _malloc(...) MSVCRT$malloc(__VA_ARGS__)
