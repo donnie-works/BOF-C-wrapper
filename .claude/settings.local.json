@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(ls:*)",
+      "Bash(python -c:*)",
+      "Bash(grep:*)",
+      "Bash(tr:*)",
+      "WebFetch(domain:adaptix-framework.gitbook.io)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(git mv:*)",
+      "Bash(C:/msys64/usr/bin/make.exe release)",
+      "Bash(TMPDIR=\"$HOME/tmp\" TMP=\"$HOME/tmp\" TEMP=\"$HOME/tmp\" C:/msys64/usr/bin/make.exe:*)",
+      "Bash(C:/ProgramData/mingw64/mingw64/bin/gcc.exe -Wall -I../include -c ../core/crypto.c -o /dev/null)",
+      "Bash(C:/ProgramData/mingw64/mingw64/bin/gcc.exe -Wall -I../include -c ../core/crypto.c -o crypto_test.o -v)",
+      "Bash(C:/ProgramData/mingw64/mingw64/bin/gcc.exe -Wall -I../include -c ../core/crypto.c -o crypto_test.o)",
+      "Bash(echo:*)"
+    ]
+  }
+}

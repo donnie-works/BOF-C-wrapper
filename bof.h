@@ -44,6 +44,8 @@ DECLSPEC_IMPORT void __cdecl BeaconOutput(int type, const char* data, int len);
 
 #define _printf(fmt, ...) BeaconPrintf(CALLBACK_OUTPUT, fmt, ##__VA_ARGS__)
 #define _perror(fmt, ...) BeaconPrintf(CALLBACK_ERROR, fmt, ##__VA_ARGS__)
+#define _output(data, len) BeaconOutput(CALLBACK_OUTPUT, data, len)
+#define _output_err(data, len) BeaconOutput(CALLBACK_ERROR, data, len)
 
 /* ===========================================================================
  * ARGUMENT PARSING
@@ -173,18 +175,112 @@ DECLSPEC_IMPORT BOOL  BeaconRemoveValue(const char* key);
 /* String conversion */
 DECLSPEC_IMPORT BOOL toWideChar(const char* src, wchar_t* dst, int max);
 
-/* Beacon metadata */
+/* Heap record for sleep masking */
+#define MAX_HEAP_RECORDS 64
+#define MASK_KEY_SIZE 16
+#define MAX_REGIONS 32
+#define MAX_ALLOCATED_MEMORY 6
+
+typedef struct {
+    void* ptr;
+    size_t size;
+} HEAP_RECORD;
+
+/* Section labels (CS-compatible) */
+typedef enum {
+    LABEL_UNKNOWN = 0,
+    LABEL_PEHEADER,
+    LABEL_TEXT,
+    LABEL_RDATA,
+    LABEL_DATA,
+    LABEL_PDATA,
+    LABEL_RELOC,
+    LABEL_RSRC,
+    LABEL_BSS,
+    LABEL_EDATA,
+    LABEL_IDATA,
+    LABEL_CRT,
+    LABEL_TLS
+} SECTION_LABEL;
+
+/* Memory region info (CS-compatible) */
+typedef struct {
+    void*         address;
+    DWORD         size;
+    DWORD         currentProtection;
+    DWORD         previousProtection;
+    SECTION_LABEL label;
+    BOOL          maskSection;
+    char          name[8];
+} MEMORY_REGION_INFO;
+
+/* Allocation purpose (CS-compatible) */
+typedef enum {
+    PURPOSE_UNKNOWN = 0,
+    PURPOSE_BEACON_MEMORY,
+    PURPOSE_SLEEPMASK_MEMORY,
+    PURPOSE_BOF_MEMORY,
+    PURPOSE_HEAP_MEMORY
+} ALLOCATION_PURPOSE;
+
+/* Allocation method (CS-compatible) */
+typedef enum {
+    METHOD_UNKNOWN = 0,
+    METHOD_VIRTUALALLOC,
+    METHOD_HEAPALLOC,
+    METHOD_NTALLOCATE,
+    METHOD_MAPPED
+} ALLOCATION_METHOD;
+
+/* Allocated memory structure (CS-compatible) */
+typedef struct {
+    ALLOCATION_PURPOSE purpose;
+    void*              baseAddress;
+    SIZE_T             regionSize;
+    DWORD              type;
+    ALLOCATION_METHOD  allocationMethod;
+    BOOL               cleanup;
+    DWORD              numSections;
+    MEMORY_REGION_INFO sections[MAX_REGIONS];
+} ALLOCATED_MEMORY;
+
+/* Beacon metadata (extended with memory info, CS-compatible) */
 typedef struct {
     int   version;
-    int   pid;
-    int   ppid;
-    BOOL  is64;
+    int   sleepTime;
+    int   jitter;
+    BOOL  isX64;
     BOOL  isAdmin;
-    char* processName;
-    char* userName;
+    DWORD pid;
+    DWORD ppid;
+    char  processName[260];
+    char  userName[128];
+    char  computerName[64];
+
+    // Memory info
+    void* beacon_ptr;
+    void* sleep_mask_ptr;
+    DWORD sleep_mask_size;
+    DWORD sleep_mask_text_size;
+    HEAP_RECORD* heap_records;      // NULL-terminated list
+    BYTE  mask[MASK_KEY_SIZE];
+
+    // Allocated memory regions (CS-compatible) - pointer to static storage
+    DWORD numAllocatedMemory;
+    ALLOCATED_MEMORY* allocatedMemory;  // Pointer, not embedded array
 } BEACON_INFO;
 
-DECLSPEC_IMPORT void BeaconInformation(BEACON_INFO* info);
+DECLSPEC_IMPORT BOOL BeaconInformation(BEACON_INFO* info);
+
+/* Heap record management for sleep masking */
+DECLSPEC_IMPORT BOOL BeaconAddHeapRecord(void* ptr, size_t size);
+DECLSPEC_IMPORT BOOL BeaconRemoveHeapRecord(void* ptr);
+DECLSPEC_IMPORT HEAP_RECORD* BeaconGetHeapRecords(void);
+
+/* Auto-registering heap wrappers (for sensitive allocations) */
+DECLSPEC_IMPORT void* BeaconMalloc(size_t size);
+DECLSPEC_IMPORT void* BeaconRealloc(void* ptr, size_t size);
+DECLSPEC_IMPORT void  BeaconFree(void* ptr);
 
 /* Custom user data */
 DECLSPEC_IMPORT char* BeaconGetCustomUserData(void);
@@ -285,6 +381,7 @@ DECLSPEC_IMPORT DWORD  WINAPI KERNEL32$GetThreadId(HANDLE);
 /* Handles */
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$CloseHandle(HANDLE);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$DuplicateHandle(HANDLE, HANDLE, HANDLE, LPHANDLE, DWORD, BOOL, DWORD);
+DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$SetHandleInformation(HANDLE, DWORD, DWORD);
 
 /* Memory */
 DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$VirtualAlloc(LPVOID, SIZE_T, DWORD, DWORD);
@@ -296,6 +393,10 @@ DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$GetProcessHeap(void);
 DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$HeapAlloc(HANDLE, DWORD, SIZE_T);
 DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$HeapReAlloc(HANDLE, DWORD, LPVOID, SIZE_T);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$HeapFree(HANDLE, DWORD, LPVOID);
+DECLSPEC_IMPORT HGLOBAL WINAPI KERNEL32$GlobalAlloc(UINT, SIZE_T);
+DECLSPEC_IMPORT HGLOBAL WINAPI KERNEL32$GlobalFree(HGLOBAL);
+DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$GlobalLock(HGLOBAL);
+DECLSPEC_IMPORT BOOL WINAPI KERNEL32$GlobalUnlock(HGLOBAL);
 
 /* Modules */
 DECLSPEC_IMPORT HMODULE WINAPI KERNEL32$GetModuleHandleA(LPCSTR);
@@ -317,6 +418,18 @@ DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$TerminateProcess(HANDLE, UINT);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$GetExitCodeProcess(HANDLE, LPDWORD);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$CreateProcessA(LPCSTR, LPSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCSTR, LPSTARTUPINFOA, LPPROCESS_INFORMATION);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$CreateProcessW(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
+
+/* Process Thread Attributes (for PPID spoofing, etc.) */
+DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$InitializeProcThreadAttributeList(LPPROC_THREAD_ATTRIBUTE_LIST, DWORD, DWORD, PSIZE_T);
+DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$UpdateProcThreadAttribute(LPPROC_THREAD_ATTRIBUTE_LIST, DWORD, DWORD_PTR, PVOID, SIZE_T, PVOID, PSIZE_T);
+DECLSPEC_IMPORT void   WINAPI KERNEL32$DeleteProcThreadAttributeList(LPPROC_THREAD_ATTRIBUTE_LIST);
+
+#ifndef PROC_THREAD_ATTRIBUTE_PARENT_PROCESS
+#define PROC_THREAD_ATTRIBUTE_PARENT_PROCESS 0x00020000
+#endif
+#ifndef EXTENDED_STARTUPINFO_PRESENT
+#define EXTENDED_STARTUPINFO_PRESENT 0x00080000
+#endif
 
 /* Thread */
 DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$OpenThread(DWORD, BOOL, DWORD);
@@ -346,6 +459,9 @@ DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$ReadFile(HANDLE, LPVOID, DWORD, LPDWORD, 
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$WriteFile(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED);
 DECLSPEC_IMPORT DWORD  WINAPI KERNEL32$GetFileSize(HANDLE, LPDWORD);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$GetFileSizeEx(HANDLE, PLARGE_INTEGER);
+DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateFileMappingA(HANDLE, LPSECURITY_ATTRIBUTES, DWORD, DWORD, DWORD, LPCSTR);
+DECLSPEC_IMPORT LPVOID WINAPI KERNEL32$MapViewOfFile(HANDLE, DWORD, DWORD, DWORD, SIZE_T);
+DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$UnmapViewOfFile(LPCVOID);
 DECLSPEC_IMPORT DWORD  WINAPI KERNEL32$SetFilePointer(HANDLE, LONG, PLONG, DWORD);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$DeleteFileA(LPCSTR);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$DeleteFileW(LPCWSTR);
@@ -360,6 +476,18 @@ DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$FindFirstFileW(LPCWSTR, LPWIN32_FIND_DATA
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$FindNextFileA(HANDLE, LPWIN32_FIND_DATAA);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$FindNextFileW(HANDLE, LPWIN32_FIND_DATAW);
 DECLSPEC_IMPORT BOOL   WINAPI KERNEL32$FindClose(HANDLE);
+
+/* Named Pipes */
+DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateNamedPipeA(LPCSTR, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, LPSECURITY_ATTRIBUTES);
+DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateNamedPipeW(LPCWSTR, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, LPSECURITY_ATTRIBUTES);
+DECLSPEC_IMPORT BOOL WINAPI KERNEL32$ConnectNamedPipe(HANDLE, LPOVERLAPPED);
+DECLSPEC_IMPORT BOOL WINAPI KERNEL32$DisconnectNamedPipe(HANDLE);
+DECLSPEC_IMPORT BOOL WINAPI KERNEL32$PeekNamedPipe(HANDLE, LPVOID, DWORD, LPDWORD, LPDWORD, LPDWORD);
+
+/* Mailslots */
+DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateMailslotA(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES);
+DECLSPEC_IMPORT HANDLE WINAPI KERNEL32$CreateMailslotW(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES);
+DECLSPEC_IMPORT BOOL WINAPI KERNEL32$GetMailslotInfo(HANDLE, LPDWORD, LPDWORD, LPDWORD, LPDWORD);
 
 /* Directories */
 DECLSPEC_IMPORT BOOL  WINAPI KERNEL32$CreateDirectoryA(LPCSTR, LPSECURITY_ATTRIBUTES);
@@ -621,6 +749,7 @@ DECLSPEC_IMPORT int CDECL USER32$wsprintfW(LPWSTR, LPCWSTR, ...);
 
 DECLSPEC_IMPORT HINSTANCE WINAPI SHELL32$ShellExecuteA(HWND, LPCSTR, LPCSTR, LPCSTR, LPCSTR, INT);
 DECLSPEC_IMPORT HINSTANCE WINAPI SHELL32$ShellExecuteW(HWND, LPCWSTR, LPCWSTR, LPCWSTR, LPCWSTR, INT);
+DECLSPEC_IMPORT LPWSTR* WINAPI SHELL32$CommandLineToArgvW(LPCWSTR, int*);
 DECLSPEC_IMPORT BOOL WINAPI SHELL32$SHGetSpecialFolderPathA(HWND, LPSTR, int, BOOL);
 DECLSPEC_IMPORT BOOL WINAPI SHELL32$SHGetSpecialFolderPathW(HWND, LPWSTR, int, BOOL);
 
@@ -642,8 +771,25 @@ DECLSPEC_IMPORT void WINAPI OLE32$CoTaskMemFree(LPVOID);
 
 DECLSPEC_IMPORT BSTR WINAPI OLEAUT32$SysAllocString(const OLECHAR*);
 DECLSPEC_IMPORT void WINAPI OLEAUT32$SysFreeString(BSTR);
+DECLSPEC_IMPORT UINT WINAPI OLEAUT32$SysStringLen(BSTR);
 DECLSPEC_IMPORT void WINAPI OLEAUT32$VariantInit(VARIANTARG*);
 DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$VariantClear(VARIANTARG*);
+DECLSPEC_IMPORT SAFEARRAY* WINAPI OLEAUT32$SafeArrayCreate(VARTYPE, UINT, SAFEARRAYBOUND*);
+DECLSPEC_IMPORT SAFEARRAY* WINAPI OLEAUT32$SafeArrayCreateVector(VARTYPE, LONG, ULONG);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$SafeArrayAccessData(SAFEARRAY*, void**);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$SafeArrayUnaccessData(SAFEARRAY*);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$SafeArrayPutElement(SAFEARRAY*, LONG*, void*);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$SafeArrayGetElement(SAFEARRAY*, LONG*, void*);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$SafeArrayDestroy(SAFEARRAY*);
+DECLSPEC_IMPORT UINT WINAPI OLEAUT32$SafeArrayGetDim(SAFEARRAY*);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$SafeArrayGetLBound(SAFEARRAY*, UINT, LONG*);
+DECLSPEC_IMPORT HRESULT WINAPI OLEAUT32$SafeArrayGetUBound(SAFEARRAY*, UINT, LONG*);
+
+/* ===========================================================================
+ * MSCOREE (.NET CLR Hosting)
+ * ===========================================================================*/
+
+DECLSPEC_IMPORT HRESULT WINAPI MSCOREE$CLRCreateInstance(REFCLSID, REFIID, LPVOID*);
 
 /* ===========================================================================
  * MSVCRT (use sparingly)
@@ -676,6 +822,14 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$sscanf(const char*, const char*, ...);
 DECLSPEC_IMPORT long __cdecl MSVCRT$strtol(const char*, char**, int);
 DECLSPEC_IMPORT unsigned long __cdecl MSVCRT$strtoul(const char*, char**, int);
 DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
+DECLSPEC_IMPORT char* __cdecl MSVCRT$_strlwr(char*);
+DECLSPEC_IMPORT errno_t __cdecl MSVCRT$mbstowcs_s(size_t*, wchar_t*, size_t, const char*, size_t);
+DECLSPEC_IMPORT size_t __cdecl MSVCRT$mbstowcs(wchar_t*, const char*, size_t);
+DECLSPEC_IMPORT int __cdecl MSVCRT$_snprintf(char*, size_t, const char*, ...);
+DECLSPEC_IMPORT int __cdecl MSVCRT$_open_osfhandle(intptr_t, int);
+DECLSPEC_IMPORT int __cdecl MSVCRT$_dup2(int, int);
+DECLSPEC_IMPORT int __cdecl MSVCRT$_close(int);
+DECLSPEC_IMPORT int __cdecl MSVCRT$_fileno(void*);
 
 /* ===========================================================================
  * CONVENIENCE MACROS
@@ -695,6 +849,7 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define GetThreadId(...) KERNEL32$GetThreadId(__VA_ARGS__)
 #define CloseHandle(...) KERNEL32$CloseHandle(__VA_ARGS__)
 #define DuplicateHandle(...) KERNEL32$DuplicateHandle(__VA_ARGS__)
+#define SetHandleInformation(...) KERNEL32$SetHandleInformation(__VA_ARGS__)
 #define VirtualAlloc(...) KERNEL32$VirtualAlloc(__VA_ARGS__)
 #define VirtualAllocEx(...) KERNEL32$VirtualAllocEx(__VA_ARGS__)
 #define VirtualFree(...) KERNEL32$VirtualFree(__VA_ARGS__)
@@ -704,6 +859,10 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define HeapAlloc(...) KERNEL32$HeapAlloc(__VA_ARGS__)
 #define HeapReAlloc(...) KERNEL32$HeapReAlloc(__VA_ARGS__)
 #define HeapFree(...) KERNEL32$HeapFree(__VA_ARGS__)
+#define GlobalAlloc(...) KERNEL32$GlobalAlloc(__VA_ARGS__)
+#define GlobalFree(...) KERNEL32$GlobalFree(__VA_ARGS__)
+#define GlobalLock(...) KERNEL32$GlobalLock(__VA_ARGS__)
+#define GlobalUnlock(...) KERNEL32$GlobalUnlock(__VA_ARGS__)
 #define GetModuleHandleA(...) KERNEL32$GetModuleHandleA(__VA_ARGS__)
 #define GetModuleHandleW(...) KERNEL32$GetModuleHandleW(__VA_ARGS__)
 #define LoadLibraryA(...) KERNEL32$LoadLibraryA(__VA_ARGS__)
@@ -719,6 +878,9 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define GetExitCodeProcess(...) KERNEL32$GetExitCodeProcess(__VA_ARGS__)
 #define CreateProcessA(...) KERNEL32$CreateProcessA(__VA_ARGS__)
 #define CreateProcessW(...) KERNEL32$CreateProcessW(__VA_ARGS__)
+#define InitializeProcThreadAttributeList(...) KERNEL32$InitializeProcThreadAttributeList(__VA_ARGS__)
+#define UpdateProcThreadAttribute(...) KERNEL32$UpdateProcThreadAttribute(__VA_ARGS__)
+#define DeleteProcThreadAttributeList(...) KERNEL32$DeleteProcThreadAttributeList(__VA_ARGS__)
 #define OpenThread(...) KERNEL32$OpenThread(__VA_ARGS__)
 #define CreateThread(...) KERNEL32$CreateThread(__VA_ARGS__)
 #define TerminateThread(...) KERNEL32$TerminateThread(__VA_ARGS__)
@@ -742,6 +904,9 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define WriteFile(...) KERNEL32$WriteFile(__VA_ARGS__)
 #define GetFileSize(...) KERNEL32$GetFileSize(__VA_ARGS__)
 #define GetFileSizeEx(...) KERNEL32$GetFileSizeEx(__VA_ARGS__)
+#define CreateFileMappingA(...) KERNEL32$CreateFileMappingA(__VA_ARGS__)
+#define MapViewOfFile(...) KERNEL32$MapViewOfFile(__VA_ARGS__)
+#define UnmapViewOfFile(...) KERNEL32$UnmapViewOfFile(__VA_ARGS__)
 #define SetFilePointer(...) KERNEL32$SetFilePointer(__VA_ARGS__)
 #define DeleteFileA(...) KERNEL32$DeleteFileA(__VA_ARGS__)
 #define DeleteFileW(...) KERNEL32$DeleteFileW(__VA_ARGS__)
@@ -756,6 +921,14 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define FindNextFileA(...) KERNEL32$FindNextFileA(__VA_ARGS__)
 #define FindNextFileW(...) KERNEL32$FindNextFileW(__VA_ARGS__)
 #define FindClose(...) KERNEL32$FindClose(__VA_ARGS__)
+#define CreateNamedPipeA(...) KERNEL32$CreateNamedPipeA(__VA_ARGS__)
+#define CreateNamedPipeW(...) KERNEL32$CreateNamedPipeW(__VA_ARGS__)
+#define ConnectNamedPipe(...) KERNEL32$ConnectNamedPipe(__VA_ARGS__)
+#define DisconnectNamedPipe(...) KERNEL32$DisconnectNamedPipe(__VA_ARGS__)
+#define PeekNamedPipe(...) KERNEL32$PeekNamedPipe(__VA_ARGS__)
+#define CreateMailslotA(...) KERNEL32$CreateMailslotA(__VA_ARGS__)
+#define CreateMailslotW(...) KERNEL32$CreateMailslotW(__VA_ARGS__)
+#define GetMailslotInfo(...) KERNEL32$GetMailslotInfo(__VA_ARGS__)
 #define CreateDirectoryA(...) KERNEL32$CreateDirectoryA(__VA_ARGS__)
 #define CreateDirectoryW(...) KERNEL32$CreateDirectoryW(__VA_ARGS__)
 #define RemoveDirectoryA(...) KERNEL32$RemoveDirectoryA(__VA_ARGS__)
@@ -961,6 +1134,7 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 /* shell32 */
 #define ShellExecuteA(...) SHELL32$ShellExecuteA(__VA_ARGS__)
 #define ShellExecuteW(...) SHELL32$ShellExecuteW(__VA_ARGS__)
+#define CommandLineToArgvW(...) SHELL32$CommandLineToArgvW(__VA_ARGS__)
 #define SHGetSpecialFolderPathA(...) SHELL32$SHGetSpecialFolderPathA(__VA_ARGS__)
 #define SHGetSpecialFolderPathW(...) SHELL32$SHGetSpecialFolderPathW(__VA_ARGS__)
 
@@ -976,8 +1150,22 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 /* oleaut32 */
 #define SysAllocString(...) OLEAUT32$SysAllocString(__VA_ARGS__)
 #define SysFreeString(...) OLEAUT32$SysFreeString(__VA_ARGS__)
+#define SysStringLen(...) OLEAUT32$SysStringLen(__VA_ARGS__)
 #define VariantInit(...) OLEAUT32$VariantInit(__VA_ARGS__)
 #define VariantClear(...) OLEAUT32$VariantClear(__VA_ARGS__)
+#define SafeArrayCreate(...) OLEAUT32$SafeArrayCreate(__VA_ARGS__)
+#define SafeArrayCreateVector(...) OLEAUT32$SafeArrayCreateVector(__VA_ARGS__)
+#define SafeArrayAccessData(...) OLEAUT32$SafeArrayAccessData(__VA_ARGS__)
+#define SafeArrayUnaccessData(...) OLEAUT32$SafeArrayUnaccessData(__VA_ARGS__)
+#define SafeArrayPutElement(...) OLEAUT32$SafeArrayPutElement(__VA_ARGS__)
+#define SafeArrayGetElement(...) OLEAUT32$SafeArrayGetElement(__VA_ARGS__)
+#define SafeArrayDestroy(...) OLEAUT32$SafeArrayDestroy(__VA_ARGS__)
+#define SafeArrayGetDim(...) OLEAUT32$SafeArrayGetDim(__VA_ARGS__)
+#define SafeArrayGetLBound(...) OLEAUT32$SafeArrayGetLBound(__VA_ARGS__)
+#define SafeArrayGetUBound(...) OLEAUT32$SafeArrayGetUBound(__VA_ARGS__)
+
+/* mscoree */
+#define CLRCreateInstance(...) MSCOREE$CLRCreateInstance(__VA_ARGS__)
 
 /* msvcrt - prefixed with underscore to avoid conflicts with compiler builtins */
 #define _malloc(...) MSVCRT$malloc(__VA_ARGS__)
@@ -1007,6 +1195,13 @@ DECLSPEC_IMPORT int __cdecl MSVCRT$atoi(const char*);
 #define _strtol(...) MSVCRT$strtol(__VA_ARGS__)
 #define _strtoul(...) MSVCRT$strtoul(__VA_ARGS__)
 #define _atoi(...) MSVCRT$atoi(__VA_ARGS__)
+#define _strlwr(...) MSVCRT$_strlwr(__VA_ARGS__)
+#define _mbstowcs_s(...) MSVCRT$mbstowcs_s(__VA_ARGS__)
+#define _mbstowcs(...) MSVCRT$mbstowcs(__VA_ARGS__)
+#define _open_osfhandle(...) MSVCRT$_open_osfhandle(__VA_ARGS__)
+#define _dup2(...) MSVCRT$_dup2(__VA_ARGS__)
+#define _close(...) MSVCRT$_close(__VA_ARGS__)
+#define _fileno(...) MSVCRT$_fileno(__VA_ARGS__)
 
 /* ===========================================================================
  * COBALT STRIKE COMPATIBILITY

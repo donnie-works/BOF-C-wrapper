@@ -12,7 +12,38 @@ typedef struct _UNICODE_STR {
     USHORT Length;
     USHORT MaximumLength;
     PWSTR  Buffer;
-} UNICODE_STR;
+} UNICODE_STR, UNICODE_STRING;
+
+/* PEB structures for module enumeration */
+typedef struct _PEB_LDR_DATA {
+    ULONG      Length;
+    BOOLEAN    Initialized;
+    HANDLE     SsHandle;
+    LIST_ENTRY InLoadOrderModuleList;
+    LIST_ENTRY InMemoryOrderModuleList;
+    LIST_ENTRY InInitializationOrderModuleList;
+} PEB_LDR_DATA;
+
+typedef struct _PEB {
+    BOOLEAN       InheritedAddressSpace;
+    BOOLEAN       ReadImageFileExecOptions;
+    BOOLEAN       BeingDebugged;
+    BOOLEAN       SpareBool;
+    HANDLE        Mutant;
+    PVOID         ImageBaseAddress;
+    PEB_LDR_DATA* Ldr;
+} PEB;
+
+typedef struct _LDR_DATA_TABLE_ENTRY {
+    LIST_ENTRY     InLoadOrderLinks;
+    LIST_ENTRY     InMemoryOrderLinks;
+    LIST_ENTRY     InInitializationOrderLinks;
+    PVOID          DllBase;
+    PVOID          EntryPoint;
+    ULONG          SizeOfImage;
+    UNICODE_STRING FullDllName;
+    UNICODE_STRING BaseDllName;
+} LDR_DATA_TABLE_ENTRY;
 
 typedef struct _SYSTEM_PROC_INFO {
     ULONG NextEntryOffset;

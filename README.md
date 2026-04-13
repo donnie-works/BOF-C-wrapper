@@ -17,6 +17,7 @@ This SDK seeks to eliminate that friction. Through convenience macros and pre-de
 - **bof_net.h** — Network structures (`MIB_TCPTABLE_OWNER_PID`, `IP_ADAPTER_INFO`, etc.) for use instead of `<iphlpapi.h>`
 - **bof_ntapi.h** — NT native API structures (`SYSTEM_PROC_INFO`, `PS_ATTRIBUTE_LIST`, etc.)
 - **bof_wmi.h** — WMI/DCOM interface definitions for remote operations
+- **bof_clr.h** — .NET CLR hosting interfaces for in-process assembly execution (compatible with InlineExecute-Assembly)
 - **bof_compat.h** — Compatibility layer for compiling BOFs as standalone executables outside a C2
 
 ## Usage 
@@ -205,6 +206,7 @@ void go(char* args, int len)
 | SHELL32 | Shell execute, special folders |
 | OLE32 | COM initialization |
 | OLEAUT32 | BSTR, VARIANT, SafeArray functions |
+| MSCOREE | CLR hosting (`CLRCreateInstance`) |
 | MSVCRT | String, memory, formatting (prefixed with `_`) |
 
 ---
